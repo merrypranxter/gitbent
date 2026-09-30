@@ -83,17 +83,41 @@ Goal: move beyond literal camera simulation into impossible cross-domain imaging
 - dither threshold / scale patch targets
 - RGB / CMY misregistration
 
-## V0.6 — live browser camera
+## V0.3 — live camera bridge
 
-- request camera permission
-- getUserMedia source
-- WebGL2 renderer
-- live patching
-- front / rear camera selector
-- still capture
+- [x] AI Studio camera permission
+- [x] getUserMedia source
+- [x] rear / front camera switching
+- [x] existing Bend graph applied to live frames
+- [x] processed still capture
+- [x] processed canvas video recording where MediaRecorder is supported
+- [x] conservative CPU live mode: ~480px max dimension / 15 processed FPS
+- [ ] test iPhone Safari / AI Studio preview behavior in real use
+- [ ] decide which live bends are most valuable before GPU migration
+
+## V0.4 — WebGL live renderer
+
+- move hot-path pixel work from ImageData CPU loops to WebGL2
+- preserve the same Bend graph semantics
+- increase live resolution / FPS
+- shader-friendly source/target adapters
 - performance controls
+- keep CPU renderer as fallback / reference behavior
 
-## V0.7 — temporal camera / video
+## V0.5 — wire components
+
+- resistor / attenuator
+- amplifier
+- inverter
+- diode / clip
+- quantizer
+- bit crusher
+- noise injector
+- oscillator
+- component chain per wire
+- serialize components inside saved Bend JSON
+
+## V0.6 — temporal camera / video
 
 - frame ring buffer
 - FRAME -N signals
@@ -101,7 +125,8 @@ Goal: move beyond literal camera simulation into impossible cross-domain imaging
 - delay-depth target
 - temporal displacement
 - feedback
-- video capture/export
+- geometry controlling time
+- output recording at GPU speed
 
 ## V0.8 — specimens
 
