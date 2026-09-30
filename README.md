@@ -1,61 +1,77 @@
 # gitBENT
 
-**gitBENT** is a virtual circuit-bent camera / image instrument.
+**gitBENT** is an impossible circuit-bending image instrument.
 
-It is deliberately **not** a menu of glitch filters. The image is treated as a signal system with patchable sources and targets. A saved bend is a reusable wiring graph.
+It began with the idea of simulating a circuit-bent camera, then immediately escaped the camera.
 
-## V0.1
+> **gitBENT is a patchable image nervous system where physical and impossible signals can be crossed to produce emergent visual behavior.**
 
-Current prototype:
+It is deliberately **not** a menu of glitch filters. A saved Bend is a reusable wiring graph, and the image is the consequence of that graph.
 
-- upload a still image
-- patch virtual signal jacks together
-- PATCH / BRIDGE / SHORT connection modes
-- adjust connection strength
-- visible patch cables
-- **LICK THE CIRCUIT BOARD** to add one random bend at a time
-- save/load bends in browser storage
-- export the bent image as PNG
-- phone-friendly responsive UI
+## V0.2 — Forbidden Ports
 
-### Current signal sources
+The current still-image lab can patch ordinary image signals together, but it can also cross signals that have no literal equivalent on a real camera circuit board.
 
-- RED
-- GREEN
-- BLUE
-- LUMA
-- X
-- Y
+### Sources
+
+- RED / GREEN / BLUE / LUMA
+- X / Y
 - NOISE
+- EDGE
+- RADIUS / ANGLE
+- BLOCK_X / BLOCK_Y
+- FLOW_X / FLOW_Y
+- CELL_ID
+- PALETTE_INDEX
 
-### Current targets
+### Targets
 
-- RED
-- GREEN
-- BLUE
-- X OFFSET
-- Y OFFSET
+- RED / GREEN / BLUE
+- X OFFSET / Y OFFSET
+- **SAMPLE X / SAMPLE Y** — rewrite where pixels are fetched from
 - THRESHOLD
 - POSTERIZE
+- HUE SHIFT
+- SATURATION
+- BIT DEPTH
 
-## Philosophy
+Try things such as:
 
-The point is not to select an effect.
+```
+ANGLE -> SAMPLE X
+RADIUS -> HUE SHIFT
+EDGE -> BIT DEPTH
+CELL ID -> SAMPLE Y
+FLOW X -> SATURATION
+```
 
-The point is to create a small image-processing system where "wrong" connections remain productive. Different source images should react differently to the same wiring.
+The goal is not to choose a named effect. The goal is to cross systems and discover behavior.
 
-Later phases add:
+## Current controls
 
-- virtual electronic components on wires
-- temporal frame memory
-- dithering and palette modules
-- live iPhone/browser camera input
-- WebGL processing
-- video capture
-- specimen mutation / breeding
-- optional native iOS AVFoundation + Metal version
+- upload a still image
+- patch source jacks into target jacks
+- PATCH / BRIDGE / SHORT
+- per-wire strength
+- visible cables
+- undo / redo
+- **LICK THE CIRCUIT BOARD** for one random intervention at a time
+- save/load specimens in browser storage
+- export PNG
 
-## AI Studio\n\nThis repository keeps the Google AI Studio Vite/React/TypeScript scaffold intact, so the app can continue to be opened, edited, and evolved there. Image bending itself runs client-side and does not require a Gemini call per image.\n\n## Run locally
+## Why still images first?
+
+Still images are the lab bench.
+
+The signal language should become interesting before live video is added. Once the graph has genuinely useful impossible relationships, the same system can gain frame memory, feedback, delayed frames, motion signals, and live camera input instead of becoming "the same filters, but moving."
+
+## AI Studio
+
+This repository keeps the Google AI Studio Vite/React/TypeScript scaffold intact, so the app can continue to be opened, edited, and evolved there.
+
+Image bending itself runs client-side and does not require a Gemini call per image.
+
+## Run locally
 
 ```bash
 npm install
