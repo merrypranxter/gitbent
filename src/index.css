@@ -138,6 +138,14 @@ h1 span {
   box-shadow: inset 0 0 80px rgba(0, 0, 0, .65);
 }
 
+.camera-feed {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 canvas {
   display: block;
   max-width: 100%;
@@ -170,6 +178,7 @@ canvas.empty {
 .chaos-row,
 .specimen-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 10px;
   border-top: 1px solid #492052;
@@ -214,6 +223,19 @@ canvas.empty {
 .button.danger {
   background: #41111d;
   border-color: #ff596f;
+}
+
+.button.record {
+  background: #321019;
+  border-color: #ff4f68;
+  color: #ffb3bf;
+}
+
+.button.recording {
+  background: #751527;
+  border-color: #ff5470;
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(255, 84, 112, .34);
 }
 
 .button.ghost {
@@ -453,6 +475,12 @@ footer {
   .chaos-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .image-controls .button,
+  .image-controls label.button {
+    width: 100%;
+    text-align: center;
   }
 
   .button {
