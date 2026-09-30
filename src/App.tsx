@@ -12,15 +12,37 @@ import {
   type SignalTarget,
 } from './engine.ts';
 
-const SOURCES: SignalSource[] = ['RED', 'GREEN', 'BLUE', 'LUMA', 'X', 'Y', 'NOISE'];
+const SOURCES: SignalSource[] = [
+  'RED',
+  'GREEN',
+  'BLUE',
+  'LUMA',
+  'X',
+  'Y',
+  'NOISE',
+  'EDGE',
+  'RADIUS',
+  'ANGLE',
+  'BLOCK_X',
+  'BLOCK_Y',
+  'FLOW_X',
+  'FLOW_Y',
+  'CELL_ID',
+  'PALETTE_INDEX',
+];
 const TARGETS: SignalTarget[] = [
   'RED',
   'GREEN',
   'BLUE',
   'X_OFFSET',
   'Y_OFFSET',
+  'SAMPLE_X',
+  'SAMPLE_Y',
   'THRESHOLD',
   'POSTERIZE',
+  'HUE_SHIFT',
+  'SATURATION',
+  'BIT_DEPTH',
 ];
 const MODES: ConnectionMode[] = ['PATCH', 'BRIDGE', 'SHORT'];
 
@@ -32,6 +54,15 @@ const sourceColors: Record<SignalSource, string> = {
   X: '#ff70e8',
   Y: '#b69cff',
   NOISE: '#ff9f43',
+  EDGE: '#ffffff',
+  RADIUS: '#ff4ecf',
+  ANGLE: '#5ef7ff',
+  BLOCK_X: '#ff8f3f',
+  BLOCK_Y: '#ffe95e',
+  FLOW_X: '#87ff5e',
+  FLOW_Y: '#a977ff',
+  CELL_ID: '#ff5e7d',
+  PALETTE_INDEX: '#ff66ff',
 };
 
 const targetColors: Record<SignalTarget, string> = {
@@ -40,8 +71,13 @@ const targetColors: Record<SignalTarget, string> = {
   BLUE: '#3fd5ff',
   X_OFFSET: '#ff70e8',
   Y_OFFSET: '#b69cff',
+  SAMPLE_X: '#ff4ecf',
+  SAMPLE_Y: '#5ef7ff',
   THRESHOLD: '#f8ff8d',
   POSTERIZE: '#ff9f43',
+  HUE_SHIFT: '#ff66ff',
+  SATURATION: '#87ff5e',
+  BIT_DEPTH: '#ffffff',
 };
 
 interface SavedBend {
@@ -352,20 +388,23 @@ export default function App() {
     persistBends(savedBends.filter((bend) => bend.id !== id));
   }
 
-  const sourceY = (index: number) => 34 + index * 42;
-  const targetY = (index: number) => 34 + index * 42;
+  const portSpacing = 32;
+  const sourceY = (index: number) => 34 + index * portSpacing;
+  const targetY = (index: number) => 34 + index * portSpacing;
+  const patchboardHeight =
+    58 + Math.max(SOURCES.length, TARGETS.length) * portSpacing;
 
   return (
     <main className="app-shell">
       <header className="masthead">
         <div>
-          <p className="eyebrow">VIRTUAL IMAGE INSTRUMENT // V0.1</p>
+          <p className="eyebrow">IMPOSSIBLE IMAGE INSTRUMENT // V0.2</p>
           <h1>
             git<span>BENT</span>
           </h1>
         </div>
         <p className="manifesto">
-          NOT A FILTER. A CAMERA SIGNAL WITH THE BACK PANEL RIPPED OFF.
+          PHYSICAL + IMPOSSIBLE SIGNALS. CROSS WIRES REAL CAMERAS DO NOT HAVE.
         </p>
       </header>
 
@@ -424,7 +463,7 @@ export default function App() {
 
           <svg
             className="patchboard"
-            viewBox="0 0 520 330"
+            viewBox={`0 0 520 ${patchboardHeight}`}
             role="img"
             aria-label="Circuit patch bay"
           >
