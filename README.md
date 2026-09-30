@@ -55,7 +55,7 @@ Later phases add:
 - specimen mutation / breeding
 - optional native iOS AVFoundation + Metal version
 
-## Run locally
+## AI Studio\n\nThis repository keeps the Google AI Studio Vite/React/TypeScript scaffold intact, so the app can continue to be opened, edited, and evolved there. Image bending itself runs client-side and does not require a Gemini call per image.\n\n## Run locally
 
 ```bash
 npm install
