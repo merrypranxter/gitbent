@@ -1,6 +1,6 @@
 {
-  "name": "Workspace",
-  "description": "A clean workspace ready for your GitHub repository and custom application code.",
+  "name": "gitBENT",
+  "description": "A virtual circuit-bending image instrument: patch image signals into the wrong places, discover emergent glitches, and save reusable bends.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
