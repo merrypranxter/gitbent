@@ -310,7 +310,25 @@ FRAME_-4 -> PALETTE_INDEX
 
 ## Live camera phase
 
-Browser:
+The first live implementation deliberately reuses the CPU/ImageData renderer so the actual Bend graph can be tested against moving camera input before paying the complexity cost of a GPU rewrite.
+
+Current bridge:
+
+```
+getUserMedia()
+  -> hidden video element
+  -> reduced-resolution frame canvas
+  -> ImageData
+  -> existing bendImage graph
+  -> visible processed canvas
+  -> optional canvas recording
+```
+
+Current live target is conservative: approximately 480px maximum dimension and 15 processed frames per second.
+
+This is a **behavior prototype**, not the final performance architecture.
+
+Next renderer:
 
 ```
 getUserMedia()
@@ -319,6 +337,8 @@ getUserMedia()
   -> compiled Bend graph
   -> canvas
 ```
+
+The WebGL migration should preserve Bend semantics rather than inventing a parallel live-effect system.
 
 Target iPhone Safari / installed PWA first.
 
