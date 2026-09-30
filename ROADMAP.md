@@ -14,11 +14,44 @@
 - [x] browser-local specimen save/load
 - [x] PNG export
 - [x] mobile-responsive first pass
-- [ ] test radically different images
-- [ ] tune the signal math from real use
-- [ ] undo / redo
+- [x] undo / redo
+- [ ] keep tuning signal math from real use
 
-## V0.2 — components
+## V0.2 — Forbidden Ports
+
+Goal: move beyond literal camera simulation into impossible cross-domain imaging.
+
+### New sources
+
+- [x] EDGE
+- [x] RADIUS
+- [x] ANGLE
+- [x] BLOCK_X
+- [x] BLOCK_Y
+- [x] FLOW_X
+- [x] FLOW_Y
+- [x] CELL_ID
+- [x] PALETTE_INDEX
+
+### New targets
+
+- [x] SAMPLE_X
+- [x] SAMPLE_Y
+- [x] HUE_SHIFT
+- [x] SATURATION
+- [x] BIT_DEPTH
+
+### Next V0.2 experiments
+
+- [ ] identify the best forbidden source/target pairings through play
+- [ ] add port-family labels: IMAGE / GEOMETRY / FIELD / FORBIDDEN
+- [ ] improve CELL_ID toward true Voronoi behavior
+- [ ] add a WAVE field
+- [ ] add region-based signals
+- [ ] add a true custom PALETTE target/editor
+- [ ] performance profiling before the graph grows further
+
+## V0.3 — wire components
 
 - resistor / attenuator
 - amplifier
@@ -31,7 +64,7 @@
 - component chain per wire
 - serialize components inside saved Bend JSON
 
-## V0.3 — memory
+## V0.4 — memory
 
 - previous-image / frame abstraction
 - delay
@@ -39,7 +72,7 @@
 - feedback-safe limits
 - deterministic seed plumbing
 
-## V0.4 — dither board
+## V0.5 — dither board
 
 - ordered Bayer
 - Floyd-Steinberg
@@ -50,7 +83,7 @@
 - dither threshold / scale patch targets
 - RGB / CMY misregistration
 
-## V0.5 — live browser camera
+## V0.6 — live browser camera
 
 - request camera permission
 - getUserMedia source
@@ -60,7 +93,7 @@
 - still capture
 - performance controls
 
-## V0.6 — temporal camera
+## V0.7 — temporal camera / video
 
 - frame ring buffer
 - FRAME -N signals
@@ -70,7 +103,7 @@
 - feedback
 - video capture/export
 
-## V0.7 — specimens
+## V0.8 — specimens
 
 - thumbnails
 - star/favorite
@@ -93,6 +126,9 @@
 
 - breed two bends
 - graph crossover + mutation
+- geometry controlling time
+- symbolic regions controlling compression
+- bitplanes controlling address space
 - accelerometer / gyro / touch signals
 - audio-reactive signals
 - MIDI / WebMIDI / OSC
