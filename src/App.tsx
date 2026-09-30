@@ -60,6 +60,10 @@ function displayPort(name: SignalTarget) {
   return name.replaceAll('_', ' ');
 }
 
+function cloneConnections(list: Connection[]) {
+  return list.map((wire) => ({...wire}));
+}
+
 function readSavedBends(): SavedBend[] {
   try {
     const value = localStorage.getItem('gitbent:bends');
@@ -77,6 +81,9 @@ export default function App() {
   const [imageName, setImageName] = useState('');
   const [pendingSource, setPendingSource] = useState<SignalSource | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
+  const [undoStack, setUndoStack] = useState<Connection[][]>([]);
+  const [redoStack, setRedoStack] = useState<Connection[][]>([]);
+  const sliderStartRef = useRef<Connection[] | null>(null);
   const [selectedWireId, setSelectedWireId] = useState<string | null>(null);
   const [status, setStatus] = useState(
     'LOAD AN IMAGE. THEN TOUCH A SOURCE JACK AND A TARGET JACK.',
@@ -85,6 +92,9 @@ export default function App() {
 
   const selectedWire =
     connections.find((wire) => wire.id === selectedWireId) ?? null;
+
+  const canUndo = undoStack.length > 0;
+  const canRedo = redoStack.length > 0;
 
   useEffect(() => {
     if (!sourceDataRef.current || !dimensions.width || !dimensions.height) return;
@@ -155,6 +165,62 @@ export default function App() {
     image.src = url;
   }
 
+  function commitConnections(
+    next: Connection[],
+    nextStatus?: string,
+    keepSelectedWireId?: string | null,
+  ) {
+    setUndoStack((past) => [...past, cloneConnections(connections)]);
+    setRedoStack([]);
+    setConnections(cloneConnections(next));
+    setSelectedWireId(keepSelectedWireId ?? null);
+    setPendingSource(null);
+
+    if (nextStatus) setStatus(nextStatus);
+  }
+
+  function undo() {
+    if (!undoStack.length) return;
+
+    const previous = undoStack[undoStack.length - 1];
+    setUndoStack((past) => past.slice(0, -1));
+    setRedoStack((future) => [...future, cloneConnections(connections)]);
+    setConnections(cloneConnections(previous));
+    setSelectedWireId(null);
+    setPendingSource(null);
+    sliderStartRef.current = null;
+    setStatus('UNDID THE LAST ELECTRICAL MISTAKE.');
+  }
+
+  function redo() {
+    if (!redoStack.length) return;
+
+    const next = redoStack[redoStack.length - 1];
+    setRedoStack((future) => future.slice(0, -1));
+    setUndoStack((past) => [...past, cloneConnections(connections)]);
+    setConnections(cloneConnections(next));
+    setSelectedWireId(null);
+    setPendingSource(null);
+    sliderStartRef.current = null;
+    setStatus('REDID THE DAMAGE.');
+  }
+
+  function beginWireAdjustment() {
+    if (!sliderStartRef.current) {
+      sliderStartRef.current = cloneConnections(connections);
+    }
+  }
+
+  function finishWireAdjustment() {
+    const before = sliderStartRef.current;
+    sliderStartRef.current = null;
+    if (!before) return;
+
+    setUndoStack((past) => [...past, before]);
+    setRedoStack([]);
+    setStatus('WIRE TWEAKED.');
+  }
+
   function chooseSource(source: SignalSource) {
     setPendingSource(source);
     setStatus(`${source} ARMED. NOW TOUCH A TARGET JACK.`);
@@ -174,30 +240,34 @@ export default function App() {
       strength: 0.65,
     };
 
-    setConnections((current) => [...current, wire]);
-    setSelectedWireId(wire.id);
-    setPendingSource(null);
-    setStatus(`${wire.source} → ${displayPort(wire.target)} CONNECTED.`);
+    commitConnections(
+      [...connections, wire],
+      `${wire.source} → ${displayPort(wire.target)} CONNECTED.`,
+      wire.id,
+    );
   }
 
-  function updateSelected(patch: Partial<Connection>) {
+  function updateSelected(patch: Partial<Connection>, recordHistory = true) {
     if (!selectedWireId) return;
 
-    setConnections((current) =>
-      current.map((wire) =>
-        wire.id === selectedWireId ? {...wire, ...patch} : wire,
-      ),
+    const next = connections.map((wire) =>
+      wire.id === selectedWireId ? {...wire, ...patch} : wire,
     );
+
+    if (recordHistory) {
+      commitConnections(next, 'WIRE TWEAKED.', selectedWireId);
+    } else {
+      setConnections(next);
+    }
   }
 
   function removeSelected() {
     if (!selectedWireId) return;
 
-    setConnections((current) =>
-      current.filter((wire) => wire.id !== selectedWireId),
+    commitConnections(
+      connections.filter((wire) => wire.id !== selectedWireId),
+      'WIRE YANKED OUT.',
     );
-    setSelectedWireId(null);
-    setStatus('WIRE YANKED OUT.');
   }
 
   function lickCircuitBoard() {
@@ -214,18 +284,19 @@ export default function App() {
       strength,
     };
 
-    setConnections((current) => [...current, wire]);
-    setSelectedWireId(wire.id);
-    setStatus(
+    commitConnections(
+      [...connections, wire],
       `⚡ ACCIDENTAL CONTACT: ${source} → ${displayPort(target)} / ${mode}`,
+      wire.id,
     );
   }
 
   function clearBoard() {
-    setConnections([]);
-    setSelectedWireId(null);
-    setPendingSource(null);
-    setStatus('BOARD CLEARED. THE CAMERA HAS FORGOTTEN ITS SINS.');
+    if (!connections.length) return;
+    commitConnections(
+      [],
+      'BOARD CLEARED. THE CAMERA HAS FORGOTTEN ITS SINS.',
+    );
   }
 
   function exportPng() {
@@ -271,10 +342,10 @@ export default function App() {
       id: makeId(),
     }));
 
-    setConnections(restored);
-    setSelectedWireId(null);
-    setPendingSource(null);
-    setStatus(`${bend.name.toUpperCase()} REANIMATED.`);
+    commitConnections(
+      restored,
+      `${bend.name.toUpperCase()} REANIMATED.`,
+    );
   }
 
   function deleteBend(id: string) {
@@ -448,6 +519,12 @@ export default function App() {
             <button className="button danger" onClick={lickCircuitBoard}>
               ⚡ LICK THE CIRCUIT BOARD
             </button>
+            <button className="button" onClick={undo} disabled={!canUndo}>
+              ↶ UNDO
+            </button>
+            <button className="button" onClick={redo} disabled={!canRedo}>
+              ↷ REDO
+            </button>
             <button className="button" onClick={clearBoard}>
               CLEAR BOARD
             </button>
@@ -493,9 +570,17 @@ export default function App() {
                   max="1"
                   step="0.01"
                   value={selectedWire.strength}
+                  onPointerDown={beginWireAdjustment}
+                  onKeyDown={beginWireAdjustment}
                   onChange={(event) =>
-                    updateSelected({strength: Number(event.target.value)})
+                    updateSelected(
+                      {strength: Number(event.target.value)},
+                      false,
+                    )
                   }
+                  onPointerUp={finishWireAdjustment}
+                  onPointerCancel={finishWireAdjustment}
+                  onKeyUp={finishWireAdjustment}
                 />
               </label>
 
