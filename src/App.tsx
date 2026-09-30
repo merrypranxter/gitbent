@@ -80,6 +80,9 @@ const targetColors: Record<SignalTarget, string> = {
   BIT_DEPTH: '#ffffff',
 };
 
+type SourceMode = 'image' | 'camera';
+type CameraFacing = 'user' | 'environment';
+
 interface SavedBend {
   id: string;
   name: string;
@@ -111,9 +114,24 @@ function readSavedBends(): SavedBend[] {
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const sourceDataRef = useRef<ImageData | null>(null);
+  const imageDimensionsRef = useRef({width: 0, height: 0});
+  const liveBufferRef = useRef<HTMLCanvasElement | null>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
+  const cameraRunningRef = useRef(false);
+  const animationFrameRef = useRef<number | null>(null);
+  const lastLiveFrameRef = useRef(0);
+  const connectionsRef = useRef<Connection[]>([]);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
 
   const [dimensions, setDimensions] = useState({width: 0, height: 0});
+  const [sourceMode, setSourceMode] = useState<SourceMode>('image');
+  const [cameraFacing, setCameraFacing] = useState<CameraFacing>('environment');
+  const [cameraActive, setCameraActive] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [imageName, setImageName] = useState('');
   const [pendingSource, setPendingSource] = useState<SignalSource | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -133,7 +151,18 @@ export default function App() {
   const canRedo = redoStack.length > 0;
 
   useEffect(() => {
-    if (!sourceDataRef.current || !dimensions.width || !dimensions.height) return;
+    connectionsRef.current = connections;
+  }, [connections]);
+
+  useEffect(() => {
+    if (
+      sourceMode !== 'image' ||
+      !sourceDataRef.current ||
+      !dimensions.width ||
+      !dimensions.height
+    ) {
+      return;
+    }
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -148,7 +177,18 @@ export default function App() {
     canvas.width = dimensions.width;
     canvas.height = dimensions.height;
     canvas.getContext('2d')?.putImageData(bent, 0, 0);
-  }, [connections, dimensions]);
+  }, [connections, dimensions, sourceMode]);
+
+  useEffect(() => {
+    return () => {
+      cameraRunningRef.current = false;
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+      recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
 
   const wireCountByTarget = useMemo(() => {
     const counts: Partial<Record<SignalTarget, number>> = {};
@@ -158,8 +198,251 @@ export default function App() {
     return counts;
   }, [connections]);
 
+  function stopCameraHardware() {
+    cameraRunningRef.current = false;
+
+    if (animationFrameRef.current !== null) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
+    cameraStreamRef.current = null;
+
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  }
+
+  function stopRecording() {
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.stop();
+    }
+  }
+
+  function stopCamera() {
+    if (isRecording) stopRecording();
+    stopCameraHardware();
+    setCameraActive(false);
+
+    if (sourceDataRef.current && imageDimensionsRef.current.width) {
+      setSourceMode('image');
+      setDimensions(imageDimensionsRef.current);
+      setStatus('LIVE CAMERA OFF. STILL IMAGE LAB RESTORED.');
+    } else {
+      setDimensions({width: 0, height: 0});
+      setStatus('LIVE CAMERA OFF. NO STILL IMAGE LOADED.');
+    }
+  }
+
+  async function startCamera(facing: CameraFacing = cameraFacing) {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStatus('THIS BROWSER WILL NOT HAND OVER A CAMERA STREAM.');
+      return;
+    }
+
+    if (isRecording) stopRecording();
+    stopCameraHardware();
+    setStatus('ASKING THE CAMERA TO EXPOSE ITS NERVOUS SYSTEM...');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: {ideal: facing},
+          width: {ideal: 1280},
+          height: {ideal: 720},
+        },
+        audio: false,
+      });
+
+      const video = videoRef.current;
+      if (!video) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      cameraStreamRef.current = stream;
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+
+      await new Promise<void>((resolve) => {
+        if (video.readyState >= 1 && video.videoWidth) {
+          resolve();
+          return;
+        }
+
+        const handleMetadata = () => {
+          video.removeEventListener('loadedmetadata', handleMetadata);
+          resolve();
+        };
+        video.addEventListener('loadedmetadata', handleMetadata);
+      });
+
+      await video.play();
+
+      const maxLiveDimension = 480;
+      const scale = Math.min(
+        1,
+        maxLiveDimension / Math.max(video.videoWidth, video.videoHeight),
+      );
+      const width = Math.max(2, Math.round((video.videoWidth * scale) / 2) * 2);
+      const height = Math.max(2, Math.round((video.videoHeight * scale) / 2) * 2);
+
+      let buffer = liveBufferRef.current;
+      if (!buffer) {
+        buffer = document.createElement('canvas');
+        liveBufferRef.current = buffer;
+      }
+      buffer.width = width;
+      buffer.height = height;
+
+      const bufferContext = buffer.getContext('2d', {willReadFrequently: true});
+      const outputCanvas = canvasRef.current;
+      const outputContext = outputCanvas?.getContext('2d');
+
+      if (!bufferContext || !outputCanvas || !outputContext) {
+        throw new Error('Canvas context unavailable');
+      }
+
+      outputCanvas.width = width;
+      outputCanvas.height = height;
+
+      setSourceMode('camera');
+      setCameraFacing(facing);
+      setCameraActive(true);
+      setDimensions({width, height});
+      setImageName('');
+      setStatus(
+        `LIVE CAMERA HOT // ${facing === 'environment' ? 'REAR' : 'FRONT'} // CPU LAB MODE`,
+      );
+
+      cameraRunningRef.current = true;
+      lastLiveFrameRef.current = 0;
+      const liveFrameInterval = 1000 / 15;
+
+      const renderLiveFrame = (timestamp: number) => {
+        if (!cameraRunningRef.current) return;
+
+        if (
+          timestamp - lastLiveFrameRef.current >= liveFrameInterval &&
+          video.readyState >= 2
+        ) {
+          lastLiveFrameRef.current = timestamp;
+          bufferContext.drawImage(video, 0, 0, width, height);
+          const rawFrame = bufferContext.getImageData(0, 0, width, height);
+          const bentFrame = bendImage(
+            rawFrame,
+            width,
+            height,
+            connectionsRef.current,
+          );
+          outputContext.putImageData(bentFrame, 0, 0);
+        }
+
+        animationFrameRef.current = requestAnimationFrame(renderLiveFrame);
+      };
+
+      animationFrameRef.current = requestAnimationFrame(renderLiveFrame);
+    } catch (error) {
+      stopCameraHardware();
+      setCameraActive(false);
+      const message =
+        error instanceof Error ? error.message : 'unknown camera failure';
+      setStatus(`CAMERA REFUSED THE PROCEDURE: ${message.toUpperCase()}`);
+    }
+  }
+
+  async function flipCamera() {
+    const nextFacing: CameraFacing =
+      cameraFacing === 'environment' ? 'user' : 'environment';
+    await startCamera(nextFacing);
+  }
+
+  function preferredRecordingMimeType() {
+    if (typeof MediaRecorder === 'undefined') return '';
+
+    const candidates = [
+      'video/mp4;codecs=avc1.42E01E',
+      'video/mp4',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm',
+    ];
+
+    return (
+      candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? ''
+    );
+  }
+
+  function startRecording() {
+    const canvas = canvasRef.current;
+
+    if (!cameraActive || !canvas) {
+      setStatus('TURN ON THE LIVE CAMERA BEFORE RECORDING IT.');
+      return;
+    }
+
+    if (
+      typeof MediaRecorder === 'undefined' ||
+      typeof canvas.captureStream !== 'function'
+    ) {
+      setStatus('THIS BROWSER CANNOT RECORD THE PROCESSED CANVAS YET.');
+      return;
+    }
+
+    try {
+      const stream = canvas.captureStream(15);
+      const mimeType = preferredRecordingMimeType();
+      const recorder = mimeType
+        ? new MediaRecorder(stream, {mimeType})
+        : new MediaRecorder(stream);
+
+      recordedChunksRef.current = [];
+      recordingStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size) recordedChunksRef.current.push(event.data);
+      };
+
+      recorder.onstop = () => {
+        const finalType = recorder.mimeType || mimeType || 'video/webm';
+        const blob = new Blob(recordedChunksRef.current, {type: finalType});
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const extension = finalType.includes('mp4') ? 'mp4' : 'webm';
+        link.download = `gitbent-live-${Date.now()}.${extension}`;
+        link.href = url;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
+        recordingStreamRef.current = null;
+        mediaRecorderRef.current = null;
+        recordedChunksRef.current = [];
+        setIsRecording(false);
+        setStatus('VIDEO CAPTURED FROM THE BENT OUTPUT.');
+      };
+
+      recorder.start(250);
+      setIsRecording(true);
+      setStatus('● RECORDING THE PROCESSED SIGNAL.');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'unknown recorder failure';
+      setStatus(`RECORDER FAILED: ${message.toUpperCase()}`);
+    }
+  }
+
   function loadImage(file?: File) {
     if (!file) return;
+
+    if (isRecording) stopRecording();
+    stopCameraHardware();
+    setCameraActive(false);
+    setSourceMode('image');
 
     const url = URL.createObjectURL(file);
     const image = new Image();
@@ -186,6 +469,7 @@ export default function App() {
 
       context.drawImage(image, 0, 0, width, height);
       sourceDataRef.current = context.getImageData(0, 0, width, height);
+      imageDimensionsRef.current = {width, height};
 
       setDimensions({width, height});
       setImageName(file.name);
@@ -340,7 +624,12 @@ export default function App() {
     if (!canvas || !dimensions.width) return;
 
     const link = document.createElement('a');
-    const stem = imageName ? imageName.replace(/\.[^.]+$/, '') : 'image';
+    const stem =
+      sourceMode === 'camera'
+        ? `gitbent-live-${Date.now()}`
+        : imageName
+          ? imageName.replace(/\.[^.]+$/, '')
+          : 'image';
     link.download = `${stem}-gitbent.png`;
     link.href = canvas.toDataURL('image/png');
     link.click();
@@ -398,7 +687,7 @@ export default function App() {
     <main className="app-shell">
       <header className="masthead">
         <div>
-          <p className="eyebrow">IMPOSSIBLE IMAGE INSTRUMENT // V0.2</p>
+          <p className="eyebrow">IMPOSSIBLE IMAGE INSTRUMENT // V0.3 LIVE LAB</p>
           <h1>
             git<span>BENT</span>
           </h1>
@@ -411,7 +700,7 @@ export default function App() {
       <section className="workbench">
         <div className="viewer panel">
           <div className="panel-topline">
-            <span>IMAGE MONITOR</span>
+            <span>{sourceMode === 'camera' ? 'LIVE BENT CAMERA' : 'IMAGE MONITOR'}</span>
             <span>
               {dimensions.width
                 ? `${dimensions.width}×${dimensions.height}`
@@ -420,6 +709,7 @@ export default function App() {
           </div>
 
           <div className="screen">
+            <video ref={videoRef} className="camera-feed" playsInline muted />
             <canvas
               ref={canvasRef}
               className={dimensions.width ? '' : 'empty'}
@@ -427,7 +717,7 @@ export default function App() {
             {!dimensions.width && (
               <div className="empty-message">
                 <strong>NO IMAGE SIGNAL</strong>
-                <span>Feed the machine a JPG, PNG, or WEBP.</span>
+                <span>Load a still image or turn on the live camera.</span>
               </div>
             )}
           </div>
@@ -441,13 +731,40 @@ export default function App() {
                 onChange={(event) => loadImage(event.target.files?.[0])}
               />
             </label>
+
+            {!cameraActive ? (
+              <button className="button hot" onClick={() => startCamera()}>
+                START LIVE CAMERA
+              </button>
+            ) : (
+              <>
+                <button className="button" onClick={flipCamera}>
+                  FLIP CAMERA
+                </button>
+                <button className="button" onClick={stopCamera}>
+                  STOP CAMERA
+                </button>
+              </>
+            )}
+
             <button
               className="button"
               onClick={exportPng}
               disabled={!dimensions.width}
             >
-              EXPORT PNG
+              CAPTURE PNG
             </button>
+
+            {cameraActive &&
+              (!isRecording ? (
+                <button className="button record" onClick={startRecording}>
+                  ● RECORD VIDEO
+                </button>
+              ) : (
+                <button className="button recording" onClick={stopRecording}>
+                  ■ STOP RECORDING
+                </button>
+              ))}
           </div>
         </div>
 
