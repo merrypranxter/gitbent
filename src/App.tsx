@@ -123,6 +123,7 @@ export default function App() {
   const animationFrameRef = useRef<number | null>(null);
   const lastLiveFrameRef = useRef(0);
   const connectionsRef = useRef<Connection[]>([]);
+  const selfieMirroredRef = useRef(true);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -130,6 +131,7 @@ export default function App() {
   const [dimensions, setDimensions] = useState({width: 0, height: 0});
   const [sourceMode, setSourceMode] = useState<SourceMode>('image');
   const [cameraFacing, setCameraFacing] = useState<CameraFacing>('environment');
+  const [selfieMirrored, setSelfieMirrored] = useState(true);
   const [cameraActive, setCameraActive] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [imageName, setImageName] = useState('');
@@ -153,6 +155,10 @@ export default function App() {
   useEffect(() => {
     connectionsRef.current = connections;
   }, [connections]);
+
+  useEffect(() => {
+    selfieMirroredRef.current = selfieMirrored;
+  }, [selfieMirrored]);
 
   useEffect(() => {
     if (
@@ -330,7 +336,16 @@ export default function App() {
           video.readyState >= 2
         ) {
           lastLiveFrameRef.current = timestamp;
+          bufferContext.setTransform(1, 0, 0, 1, 0, 0);
+          bufferContext.clearRect(0, 0, width, height);
+
+          if (facing === 'user' && selfieMirroredRef.current) {
+            bufferContext.setTransform(-1, 0, 0, 1, width, 0);
+          }
+
           bufferContext.drawImage(video, 0, 0, width, height);
+          bufferContext.setTransform(1, 0, 0, 1, 0, 0);
+
           const rawFrame = bufferContext.getImageData(0, 0, width, height);
           const bentFrame = bendImage(
             rawFrame,
@@ -358,6 +373,15 @@ export default function App() {
     const nextFacing: CameraFacing =
       cameraFacing === 'environment' ? 'user' : 'environment';
     await startCamera(nextFacing);
+  }
+
+  function toggleSelfieMirror() {
+    setSelfieMirrored((current) => {
+      const next = !current;
+      selfieMirroredRef.current = next;
+      setStatus(`SELFIE MIRROR ${next ? 'ON' : 'OFF'}.`);
+      return next;
+    });
   }
 
   function preferredRecordingMimeType() {
