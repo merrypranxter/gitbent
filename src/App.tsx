@@ -721,10 +721,10 @@ export default function App() {
         </p>
       </header>
 
-      <section className="workbench">
-        <div className="viewer panel">
-          <div className="panel-topline">
-            <span>{sourceMode === 'camera' ? 'LIVE BENT CAMERA' : 'IMAGE MONITOR'}</span>
+      <section className="source-stage panel">
+        <div className="source-toolbar">
+          <div className="source-toolbar-label">
+            <strong>{sourceMode === 'camera' ? 'LIVE' : 'STILL'}</strong>
             <span>
               {dimensions.width
                 ? `${dimensions.width}×${dimensions.height}`
@@ -732,66 +732,77 @@ export default function App() {
             </span>
           </div>
 
-          <div className="screen">
-            <video ref={videoRef} className="camera-feed" playsInline muted />
-            <canvas
-              ref={canvasRef}
-              className={dimensions.width ? '' : 'empty'}
+          <label className="button mini hot">
+            LOAD IMAGE
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={(event) => loadImage(event.target.files?.[0])}
             />
-            {!dimensions.width && (
-              <div className="empty-message">
-                <strong>NO IMAGE SIGNAL</strong>
-                <span>Load a still image or turn on the live camera.</span>
-              </div>
-            )}
-          </div>
+          </label>
 
-          <div className="image-controls">
-            <label className="button hot">
-              LOAD IMAGE
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                onChange={(event) => loadImage(event.target.files?.[0])}
-              />
-            </label>
+          {!cameraActive ? (
+            <button className="button mini hot" onClick={() => startCamera()}>
+              LIVE CAMERA
+            </button>
+          ) : (
+            <>
+              <button className="button mini" onClick={flipCamera}>
+                FLIP
+              </button>
 
-            {!cameraActive ? (
-              <button className="button hot" onClick={() => startCamera()}>
-                START LIVE CAMERA
+              {cameraFacing === 'user' && (
+                <button
+                  className={`button mini mirror-toggle ${selfieMirrored ? 'active' : ''}`}
+                  onClick={toggleSelfieMirror}
+                  aria-pressed={selfieMirrored}
+                >
+                  MIRROR {selfieMirrored ? 'ON' : 'OFF'}
+                </button>
+              )}
+
+              <button className="button mini" onClick={stopCamera}>
+                CAMERA OFF
+              </button>
+            </>
+          )}
+
+          <button
+            className="button mini"
+            onClick={exportPng}
+            disabled={!dimensions.width}
+          >
+            SNAP PNG
+          </button>
+
+          {cameraActive &&
+            (!isRecording ? (
+              <button className="button mini record" onClick={startRecording}>
+                ● REC
               </button>
             ) : (
-              <>
-                <button className="button" onClick={flipCamera}>
-                  FLIP CAMERA
-                </button>
-                <button className="button" onClick={stopCamera}>
-                  STOP CAMERA
-                </button>
-              </>
-            )}
-
-            <button
-              className="button"
-              onClick={exportPng}
-              disabled={!dimensions.width}
-            >
-              CAPTURE PNG
-            </button>
-
-            {cameraActive &&
-              (!isRecording ? (
-                <button className="button record" onClick={startRecording}>
-                  ● RECORD VIDEO
-                </button>
-              ) : (
-                <button className="button recording" onClick={stopRecording}>
-                  ■ STOP RECORDING
-                </button>
-              ))}
-          </div>
+              <button className="button mini recording" onClick={stopRecording}>
+                ■ STOP
+              </button>
+            ))}
         </div>
 
+        <div className="screen">
+          <video ref={videoRef} className="camera-feed" playsInline muted />
+          <canvas
+            ref={canvasRef}
+            className={dimensions.width ? '' : 'empty'}
+          />
+          {!dimensions.width && (
+            <div className="empty-message">
+              <strong>NO IMAGE SIGNAL</strong>
+              <span>Load a still image or turn on the live camera.</span>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="bend-workspace">
         <div className="patcher panel">
           <div className="panel-topline">
             <span>PATCH BAY</span>
@@ -910,13 +921,11 @@ export default function App() {
             </button>
           </div>
         </div>
-      </section>
 
-      <section className="lower-grid">
         <div className="inspector panel">
           <div className="panel-topline">
-            <span>WIRE INSPECTOR</span>
-            <span>{selectedWire ? 'LIVE' : 'IDLE'}</span>
+            <span>HOW THIS WIRE HITS</span>
+            <span>{selectedWire ? 'SELECTED' : 'PICK A WIRE'}</span>
           </div>
 
           {selectedWire ? (
@@ -941,6 +950,11 @@ export default function App() {
                 ))}
               </div>
 
+              <p className="mode-help">
+                <strong>PATCH</strong> = modulate it. <strong>BRIDGE</strong> = contaminate it.
+                <strong> SHORT</strong> = let the source take over.
+              </p>
+
               <label className="slider-label">
                 <span>STRENGTH</span>
                 <output>{Math.round(selectedWire.strength * 100)}%</output>
@@ -964,15 +978,6 @@ export default function App() {
                 />
               </label>
 
-              <p className="mode-help">
-                {selectedWire.mode === 'PATCH' &&
-                  'Signal politely modulates the destination.'}
-                {selectedWire.mode === 'BRIDGE' &&
-                  'Signals contaminate each other around their midpoint.'}
-                {selectedWire.mode === 'SHORT' &&
-                  'The source aggressively takes over the destination.'}
-              </p>
-
               <button
                 className="button danger ghost"
                 onClick={removeSelected}
@@ -981,55 +986,57 @@ export default function App() {
               </button>
             </div>
           ) : (
-            <div className="idle-card">
-              <strong>NO WIRE SELECTED</strong>
-              <span>Tap any glowing cable to alter the damage.</span>
+            <div className="idle-card inspector-idle">
+              <strong>SELECT A CABLE</strong>
+              <span>
+                PATCH / BRIDGE / SHORT and strength stay right here beside the board.
+              </span>
             </div>
           )}
         </div>
+      </section>
 
-        <div className="specimens panel">
-          <div className="panel-topline">
-            <span>SPECIMEN JARS</span>
-            <span>{savedBends.length} SAVED</span>
-          </div>
+      <section className="specimens panel specimens-full">
+        <div className="panel-topline">
+          <span>SPECIMEN JARS</span>
+          <span>{savedBends.length} SAVED</span>
+        </div>
 
-          <div className="specimen-actions">
-            <button className="button hot" onClick={saveBend}>
-              SAVE CURRENT BEND
-            </button>
-          </div>
+        <div className="specimen-actions">
+          <button className="button hot" onClick={saveBend}>
+            SAVE CURRENT BEND
+          </button>
+        </div>
 
-          <div className="specimen-list">
-            {!savedBends.length && (
-              <div className="idle-card">
-                <strong>EMPTY SHELF</strong>
-                <span>Saved bends live in this browser for now.</span>
-              </div>
-            )}
+        <div className="specimen-list">
+          {!savedBends.length && (
+            <div className="idle-card">
+              <strong>EMPTY SHELF</strong>
+              <span>Saved bends live in this browser for now.</span>
+            </div>
+          )}
 
-            {savedBends.map((bend) => (
-              <article className="specimen" key={bend.id}>
-                <button
-                  className="specimen-main"
-                  onClick={() => loadBend(bend)}
-                >
-                  <strong>{bend.name}</strong>
-                  <span>
-                    {bend.connections.length} wire
-                    {bend.connections.length === 1 ? '' : 's'}
-                  </span>
-                </button>
-                <button
-                  className="delete"
-                  onClick={() => deleteBend(bend.id)}
-                  aria-label={`Delete ${bend.name}`}
-                >
-                  ×
-                </button>
-              </article>
-            ))}
-          </div>
+          {savedBends.map((bend) => (
+            <article className="specimen" key={bend.id}>
+              <button
+                className="specimen-main"
+                onClick={() => loadBend(bend)}
+              >
+                <strong>{bend.name}</strong>
+                <span>
+                  {bend.connections.length} wire
+                  {bend.connections.length === 1 ? '' : 's'}
+                </span>
+              </button>
+              <button
+                className="delete"
+                onClick={() => deleteBend(bend.id)}
+                aria-label={`Delete ${bend.name}`}
+              >
+                ×
+              </button>
+            </article>
+          ))}
         </div>
       </section>
 
