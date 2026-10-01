@@ -108,14 +108,50 @@ h1 span {
   color: #d7a7e3;
 }
 
-.workbench {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(360px, .9fr);
-  gap: 18px;
+.source-stage {
+  margin-bottom: 14px;
 }
 
-.viewer {
-  min-height: 500px;
+.source-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 7px 8px;
+  border-bottom: 1px solid #492052;
+  background: #120817;
+}
+
+.source-toolbar-label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-right: auto;
+  padding: 0 5px;
+  color: #8e8294;
+  font-size: 10px;
+  letter-spacing: .08em;
+}
+
+.source-toolbar-label strong {
+  color: #80f7ff;
+  font-size: 11px;
+}
+
+.bend-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.inspector {
+  position: sticky;
+  top: 8px;
+}
+
+.specimens-full {
+  margin-top: 14px;
 }
 
 .screen {
@@ -182,6 +218,22 @@ canvas.empty {
   gap: 8px;
   padding: 10px;
   border-top: 1px solid #492052;
+}
+
+.source-toolbar .button {
+  min-height: 0;
+}
+
+.button.mini {
+  padding: 7px 9px;
+  font-size: 10px;
+  letter-spacing: .045em;
+}
+
+.mirror-toggle.active {
+  color: #09030f;
+  background: #8bffef;
+  border-color: #8bffef;
 }
 
 .button,
@@ -324,11 +376,9 @@ input[type="file"] {
   flex-wrap: wrap;
 }
 
-.lower-grid {
-  display: grid;
-  grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
-  gap: 18px;
-  margin-top: 18px;
+.inspector-idle {
+  min-height: 190px;
+  padding: 18px;
 }
 
 .inspector-body {
@@ -444,13 +494,8 @@ footer {
     text-align: left;
   }
 
-  .workbench,
-  .lower-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .viewer {
-    min-height: 0;
+  .bend-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, .58fr);
   }
 
   .screen {
@@ -459,6 +504,26 @@ footer {
 
   .patchboard {
     min-height: 300px;
+  }
+}
+
+@media (max-width: 720px) {
+  .bend-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .inspector {
+    position: static;
+    order: -1;
+  }
+
+  .inspector-idle {
+    min-height: 90px;
+  }
+
+  .source-toolbar-label {
+    width: 100%;
+    margin-right: 0;
   }
 }
 
@@ -471,15 +536,18 @@ footer {
     font-size: 44px;
   }
 
-  .image-controls,
   .chaos-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
   }
 
-  .image-controls .button,
-  .image-controls label.button {
-    width: 100%;
+  .source-toolbar {
+    gap: 5px;
+  }
+
+  .source-toolbar .button,
+  .source-toolbar label.button {
+    flex: 1 1 auto;
     text-align: center;
   }
 
