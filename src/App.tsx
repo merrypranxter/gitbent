@@ -82,6 +82,22 @@ const targetColors: Record<SignalTarget, string> = {
 
 type SourceMode = 'image' | 'camera';
 type CameraFacing = 'user' | 'environment';
+type ExportQuality = '720' | '1080';
+
+function getExportDimensions(
+  width: number,
+  height: number,
+  quality: ExportQuality,
+) {
+  const shortEdge = quality === '1080' ? 1080 : 720;
+  const scale = shortEdge / Math.max(1, Math.min(width, height));
+  const even = (value: number) => Math.max(2, Math.round(value / 2) * 2);
+
+  return {
+    width: even(width * scale),
+    height: even(height * scale),
+  };
+}
 
 interface SavedBend {
   id: string;
@@ -117,6 +133,7 @@ export default function App() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const sourceDataRef = useRef<ImageData | null>(null);
   const imageDimensionsRef = useRef({width: 0, height: 0});
+  const imageExportSourceRef = useRef<HTMLCanvasElement | null>(null);
   const liveBufferRef = useRef<HTMLCanvasElement | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const cameraRunningRef = useRef(false);
@@ -126,6 +143,8 @@ export default function App() {
   const selfieMirroredRef = useRef(true);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const recordingFrameRef = useRef<number | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
 
   const [dimensions, setDimensions] = useState({width: 0, height: 0});
@@ -134,6 +153,7 @@ export default function App() {
   const [selfieMirrored, setSelfieMirrored] = useState(true);
   const [cameraActive, setCameraActive] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const [exportQuality, setExportQuality] = useState<ExportQuality>('1080');
   const [imageName, setImageName] = useState('');
   const [pendingSource, setPendingSource] = useState<SignalSource | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -191,6 +211,9 @@ export default function App() {
       if (animationFrameRef.current !== null) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+      if (recordingFrameRef.current !== null) {
+        cancelAnimationFrame(recordingFrameRef.current);
+      }
       cameraStreamRef.current?.getTracks().forEach((track) => track.stop());
       recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
     };
@@ -221,6 +244,11 @@ export default function App() {
   }
 
   function stopRecording() {
+    if (recordingFrameRef.current !== null) {
+      cancelAnimationFrame(recordingFrameRef.current);
+      recordingFrameRef.current = null;
+    }
+
     const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state !== 'inactive') {
       recorder.stop();
@@ -417,11 +445,50 @@ export default function App() {
     }
 
     try {
-      const stream = canvas.captureStream(15);
+      const exportSize = getExportDimensions(
+        canvas.width,
+        canvas.height,
+        exportQuality,
+      );
+      const recordingCanvas = document.createElement('canvas');
+      recordingCanvas.width = exportSize.width;
+      recordingCanvas.height = exportSize.height;
+      recordingCanvasRef.current = recordingCanvas;
+
+      const recordingContext = recordingCanvas.getContext('2d');
+      if (!recordingContext) {
+        throw new Error('HD recording canvas unavailable');
+      }
+
+      recordingContext.imageSmoothingEnabled = false;
+
+      const paintRecordingFrame = () => {
+        recordingContext.clearRect(
+          0,
+          0,
+          recordingCanvas.width,
+          recordingCanvas.height,
+        );
+        recordingContext.drawImage(
+          canvas,
+          0,
+          0,
+          recordingCanvas.width,
+          recordingCanvas.height,
+        );
+        recordingFrameRef.current = requestAnimationFrame(paintRecordingFrame);
+      };
+      paintRecordingFrame();
+
+      const stream = recordingCanvas.captureStream(15);
       const mimeType = preferredRecordingMimeType();
-      const recorder = mimeType
-        ? new MediaRecorder(stream, {mimeType})
-        : new MediaRecorder(stream);
+      const videoBitsPerSecond =
+        exportQuality === '1080' ? 16_000_000 : 8_000_000;
+      const recorderOptions: MediaRecorderOptions = {
+        videoBitsPerSecond,
+        ...(mimeType ? {mimeType} : {}),
+      };
+      const recorder = new MediaRecorder(stream, recorderOptions);
 
       recordedChunksRef.current = [];
       recordingStreamRef.current = stream;
@@ -432,27 +499,37 @@ export default function App() {
       };
 
       recorder.onstop = () => {
+        if (recordingFrameRef.current !== null) {
+          cancelAnimationFrame(recordingFrameRef.current);
+          recordingFrameRef.current = null;
+        }
+
         const finalType = recorder.mimeType || mimeType || 'video/webm';
         const blob = new Blob(recordedChunksRef.current, {type: finalType});
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         const extension = finalType.includes('mp4') ? 'mp4' : 'webm';
-        link.download = `gitbent-live-${Date.now()}.${extension}`;
+        link.download = `gitbent-live-${exportQuality}p-${Date.now()}.${extension}`;
         link.href = url;
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
 
         recordingStreamRef.current?.getTracks().forEach((track) => track.stop());
         recordingStreamRef.current = null;
+        recordingCanvasRef.current = null;
         mediaRecorderRef.current = null;
         recordedChunksRef.current = [];
         setIsRecording(false);
-        setStatus('VIDEO CAPTURED FROM THE BENT OUTPUT.');
+        setStatus(
+          `VIDEO SAVED AT ${exportSize.width}×${exportSize.height} // ${exportQuality}P.`,
+        );
       };
 
       recorder.start(250);
       setIsRecording(true);
-      setStatus('● RECORDING THE PROCESSED SIGNAL.');
+      setStatus(
+        `● RECORDING ${exportQuality}P // ${exportSize.width}×${exportSize.height}.`,
+      );
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'unknown recorder failure';
@@ -494,6 +571,22 @@ export default function App() {
       context.drawImage(image, 0, 0, width, height);
       sourceDataRef.current = context.getImageData(0, 0, width, height);
       imageDimensionsRef.current = {width, height};
+
+      const hdCeiling = getExportDimensions(image.width, image.height, '1080');
+      const hdScale = Math.min(
+        1,
+        hdCeiling.width / image.width,
+        hdCeiling.height / image.height,
+      );
+      const hdWidth = Math.max(1, Math.round(image.width * hdScale));
+      const hdHeight = Math.max(1, Math.round(image.height * hdScale));
+      const exportSource = document.createElement('canvas');
+      exportSource.width = hdWidth;
+      exportSource.height = hdHeight;
+      exportSource
+        .getContext('2d')
+        ?.drawImage(image, 0, 0, hdWidth, hdHeight);
+      imageExportSourceRef.current = exportSource;
 
       setDimensions({width, height});
       setImageName(file.name);
@@ -644,19 +737,104 @@ export default function App() {
   }
 
   function exportPng() {
-    const canvas = canvasRef.current;
-    if (!canvas || !dimensions.width) return;
+    if (!dimensions.width) return;
 
-    const link = document.createElement('a');
-    const stem =
+    const video = videoRef.current;
+    const stillSource = imageExportSourceRef.current;
+
+    const sourceWidth =
+      sourceMode === 'camera' ? video?.videoWidth ?? 0 : stillSource?.width ?? 0;
+    const sourceHeight =
       sourceMode === 'camera'
-        ? `gitbent-live-${Date.now()}`
-        : imageName
-          ? imageName.replace(/\.[^.]+$/, '')
-          : 'image';
-    link.download = `${stem}-gitbent.png`;
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+        ? video?.videoHeight ?? 0
+        : stillSource?.height ?? 0;
+
+    if (!sourceWidth || !sourceHeight) {
+      setStatus('NO RAW SOURCE AVAILABLE FOR AN HD SNAPSHOT.');
+      return;
+    }
+
+    const exportSize = getExportDimensions(
+      sourceWidth,
+      sourceHeight,
+      exportQuality,
+    );
+    const rawCanvas = document.createElement('canvas');
+    rawCanvas.width = exportSize.width;
+    rawCanvas.height = exportSize.height;
+    const rawContext = rawCanvas.getContext('2d', {willReadFrequently: true});
+
+    if (!rawContext) {
+      setStatus('HD SNAPSHOT CANVAS FAILED. RUDE.');
+      return;
+    }
+
+    if (sourceMode === 'camera') {
+      if (!video || video.readyState < 2) {
+        setStatus('CAMERA FRAME IS NOT READY YET.');
+        return;
+      }
+
+      if (cameraFacing === 'user' && selfieMirroredRef.current) {
+        rawContext.setTransform(-1, 0, 0, 1, exportSize.width, 0);
+      }
+      rawContext.drawImage(video, 0, 0, exportSize.width, exportSize.height);
+      rawContext.setTransform(1, 0, 0, 1, 0, 0);
+    } else if (stillSource) {
+      rawContext.drawImage(
+        stillSource,
+        0,
+        0,
+        exportSize.width,
+        exportSize.height,
+      );
+    }
+
+    setStatus(
+      `RENDERING ${exportQuality}P PNG // ${exportSize.width}×${exportSize.height}...`,
+    );
+
+    window.setTimeout(() => {
+      const rawFrame = rawContext.getImageData(
+        0,
+        0,
+        exportSize.width,
+        exportSize.height,
+      );
+      const bentFrame = bendImage(
+        rawFrame,
+        exportSize.width,
+        exportSize.height,
+        connectionsRef.current,
+      );
+      const output = document.createElement('canvas');
+      output.width = exportSize.width;
+      output.height = exportSize.height;
+      output.getContext('2d')?.putImageData(bentFrame, 0, 0);
+
+      output.toBlob((blob) => {
+        if (!blob) {
+          setStatus('PNG ENCODER ATE THE SNAPSHOT.');
+          return;
+        }
+
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const stem =
+          sourceMode === 'camera'
+            ? `gitbent-live-${Date.now()}`
+            : imageName
+              ? imageName.replace(/\.[^.]+$/, '')
+              : 'image';
+        link.download = `${stem}-gitbent-${exportQuality}p.png`;
+        link.href = url;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        setStatus(
+          `PNG SAVED AT ${exportSize.width}×${exportSize.height} // ${exportQuality}P.`,
+        );
+      }, 'image/png');
+    }, 0);
   }
 
   function persistBends(next: SavedBend[]) {
@@ -711,7 +889,7 @@ export default function App() {
     <main className="app-shell">
       <header className="masthead">
         <div>
-          <p className="eyebrow">IMPOSSIBLE IMAGE INSTRUMENT // V0.3 LIVE LAB</p>
+          <p className="eyebrow">IMPOSSIBLE IMAGE INSTRUMENT // V0.4 HD LIVE LAB</p>
           <h1>
             git<span>BENT</span>
           </h1>
@@ -766,6 +944,24 @@ export default function App() {
               </button>
             </>
           )}
+
+          <div className="export-quality" role="group" aria-label="Save resolution">
+            <span>SAVE</span>
+            {(['720', '1080'] as ExportQuality[]).map((quality) => (
+              <button
+                key={quality}
+                className={`button mini quality ${exportQuality === quality ? 'active' : ''}`}
+                onClick={() => {
+                  setExportQuality(quality);
+                  setStatus(`EXPORT RESOLUTION: ${quality}P.`);
+                }}
+                disabled={isRecording}
+                aria-pressed={exportQuality === quality}
+              >
+                {quality}P
+              </button>
+            ))}
+          </div>
 
           <button
             className="button mini"
