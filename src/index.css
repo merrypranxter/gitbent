@@ -236,6 +236,34 @@ canvas.empty {
   border-color: #8bffef;
 }
 
+.export-quality {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 3px;
+  padding: 2px;
+  border: 1px solid #492052;
+  background: #09030f;
+}
+
+.export-quality > span {
+  align-self: center;
+  padding: 0 5px;
+  color: #8e8294;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.button.quality {
+  padding-inline: 8px;
+}
+
+.button.quality.active {
+  color: #09030f;
+  background: #80f7ff;
+  border-color: #80f7ff;
+}
+
 .button,
 .mode-button {
   border: 1px solid #764581;
@@ -549,6 +577,14 @@ footer {
   .source-toolbar label.button {
     flex: 1 1 auto;
     text-align: center;
+  }
+
+  .export-quality {
+    flex: 1 1 100%;
+  }
+
+  .export-quality .button {
+    flex: 1 1 0;
   }
 
   .button {
